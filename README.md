@@ -43,15 +43,71 @@ You will need an user token inorder to use this code. You can obtain it by doing
 
 ---
 
-## 🛠️ Installation
+## 🛠️ Local Installation
 
-1. Install [Python](https://python.org/downloads) on your machine (Make sure you add it to [PATH](https://i.imgur.com/Ukl6HdQ.png))
-2. Download the repository and extract it
-3. Open the main.py file and add your User Token, Guild (Server) ID and Channel ID
-4. Modify the status mode or mute/deaf option (`True` or `False`), if you want to make any adjustments
-5. Save the file
-6. Open command prompt inside the folder and run `pip install -r requirements.txt`
-7. Once the packages are downloaded, either double-click the `main.py` file in order to run it or open command prompt and run `python main.py`
+1. Install [Python](https://python.org/downloads) on your machine and make sure it is added to `PATH`.
+2. Download or clone this repository and open a terminal in the project folder.
+3. Install the dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. Run the bot:
+   ```bash
+   python main.py
+   ```
+5. The first run asks for the Discord account token, guild/server ID, and channel ID. It also creates `config.JSON`.
+
+On later runs, Voicecord asks whether you want to change the settings or continue with the old ones. If you choose to change them, you can update:
+
+- `TOKEN` — Discord account token
+- `GUILD_ID` — server/guild ID
+- `CHANNEL_ID` — voice channel ID
+- `STATUS` — `online`, `idle`, or `dnd`
+- `SELF_MUTE` — `true` or `false`
+- `SELF_DEAF` — `true` or `false`
+
+Press Enter or type `skip` for any setting you want to keep unchanged. Skipped values remain the values saved in `config.JSON`.
+
+### Environment variables
+
+You can avoid interactive prompts on a server by setting these variables instead:
+
+| Variable | Required | Example |
+|---|---:|---|
+| `TOKEN` | Yes | Your Discord user token |
+| `GUILD_ID` | Yes | `123456789012345678` |
+| `CHANNEL_ID` | Yes | `123456789012345678` |
+| `STATUS` | No | `online` |
+| `SELF_MUTE` | No | `true` |
+| `SELF_DEAF` | No | `false` |
+
+When all three required values are available through environment variables, environment values take priority over `config.JSON`. Keep your token private and never commit real credentials.
+
+---
+
+## 🌐 Deploying on Bot-Hosting.net
+
+Bot-Hosting.net must provide a Python process and allow environment variables or persistent files.
+
+1. Upload the repository files, or create the service from your GitHub fork of this repository.
+2. Select **Python** as the language/runtime. Use a supported Python 3 version such as Python 3.10 or newer.
+3. Set the startup command to:
+   ```bash
+   python main.py
+   ```
+4. Configure the dependencies as `requirements.txt`; if the panel does not detect it automatically, run:
+   ```bash
+   pip install -r requirements.txt
+   ```
+5. Add these values in the panel's environment-variable or secrets section:
+   - `TOKEN`
+   - `GUILD_ID`
+   - `CHANNEL_ID`
+   - Optional: `STATUS`, `SELF_MUTE`, and `SELF_DEAF`
+6. Save and start the service.
+7. Check the console for `Logged in as ...` and `Joined the voice channel!`.
+
+The hosting environment is non-interactive, so do not leave required values missing. You must set all of `TOKEN`, `GUILD_ID`, and `CHANNEL_ID`; otherwise Voicecord exits with a configuration error. Restart or redeploy the service after changing environment variables.
 
 ---
 

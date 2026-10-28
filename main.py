@@ -1,5 +1,9 @@
 import asyncio
 import json
+import os
+import sys
+from getpass import getpass
+
 import requests
 import websockets
 
@@ -25,6 +29,44 @@ def prompt_boolean(name, default):
         print("Please enter yes or no.")
 
 
+def prompt_status(current):
+    while True:
+        answer = input(
+            f"STATUS (online/dnd/idle) [{current}], or press Enter to keep it, or type skip: "
+        ).strip().lower()
+        if answer in ("", "skip"):
+            return current
+        if answer in ("online", "dnd", "idle"):
+            return answer
+        print("Please enter online, dnd, idle, skip, or press Enter.")
+
+
+def prompt_boolean_optional(name, current):
+    answer = input(
+        f"{name} [{ 'yes' if current else 'no' }], or press Enter to keep it, or type skip: "
+    ).strip().lower()
+    if answer in ("", "skip"):
+        return current
+    if answer in ("true", "yes", "y", "1"):
+        return True
+    if answer in ("false", "no", "n", "0"):
+        return False
+    print("Please enter yes or no. Keeping the old setting.")
+    return current
+
+
+def prompt_optional(name, current, secret=False):
+    if secret:
+        answer = getpass(f"{name} (current value saved), press Enter or type skip to keep it: ").strip()
+    else:
+        answer = input(
+            f"{name} [{current}], press Enter or type skip to keep it: "
+        ).strip()
+    if answer in ("", "skip"):
+        return current
+    return answer
+
+
 def load_config():
     config = {}
     try:
@@ -32,6 +74,19 @@ def load_config():
             config = json.load(config_file)
     except (FileNotFoundError, json.JSONDecodeError):
         pass
+
+    for key in ("TOKEN", "GUILD_ID", "CHANNEL_ID", "STATUS"):
+        environment_value = os.getenv(key)
+        if environment_value:
+            config[key] = environment_value
+
+    for key in ("SELF_MUTE", "SELF_DEAF"):
+        environment_value = os.getenv(key)
+        if environment_value is not None:
+            config[key] = environment_value
+
+    if isinstance(config.get("STATUS"), str):
+        config["STATUS"] = config["STATUS"].strip().lower()
 
     placeholders = ("Add your token here", "ADD_YOUR_SERVER_ID_HERE", "ADD_YOUR_CHANNEL_ID_HERE")
     required_values = {
@@ -42,29 +97,42 @@ def load_config():
 
     missing_config = any(not value or value in placeholders for value in required_values.values())
     missing_config = missing_config or config.get("STATUS") not in ("online", "dnd", "idle")
+    missing_config = missing_config or "SELF_MUTE" not in config or "SELF_DEAF" not in config
 
-    if missing_config or "SELF_MUTE" not in config or "SELF_DEAF" not in config:
+    interactive = sys.stdin is not None and sys.stdin.isatty()
+    if missing_config:
+        if not interactive:
+            print("Missing configuration. Set TOKEN, GUILD_ID, and CHANNEL_ID as environment variables or create config.JSON.")
+            raise SystemExit(1)
+
         print("config.JSON was not found or is incomplete. Please enter the configuration values.")
-        required_values["TOKEN"] = prompt_required("TOKEN", required_values["TOKEN"], "Add your token here")
-        required_values["GUILD_ID"] = prompt_required("GUILD_ID", required_values["GUILD_ID"], "ADD_YOUR_SERVER_ID_HERE")
-        required_values["CHANNEL_ID"] = prompt_required("CHANNEL_ID", required_values["CHANNEL_ID"], "ADD_YOUR_CHANNEL_ID_HERE")
+        config["TOKEN"] = prompt_required("TOKEN", required_values["TOKEN"], "Add your token here")
+        config["GUILD_ID"] = prompt_required("GUILD_ID", required_values["GUILD_ID"], "ADD_YOUR_SERVER_ID_HERE")
+        config["CHANNEL_ID"] = prompt_required("CHANNEL_ID", required_values["CHANNEL_ID"], "ADD_YOUR_CHANNEL_ID_HERE")
 
-        status = config.get("STATUS", "online")
-        while status not in ("online", "dnd", "idle"):
-            status = input("STATUS (online/dnd/idle) [online]: ").strip().lower() or "online"
+        config["STATUS"] = prompt_status(config.get("STATUS", "online"))
+        config["SELF_MUTE"] = prompt_boolean_optional("SELF_MUTE", config.get("SELF_MUTE", True))
+        config["SELF_DEAF"] = prompt_boolean_optional("SELF_DEAF", config.get("SELF_DEAF", False))
+        should_save = True
+    else:
+        should_save = False
+        if interactive:
+            print("Do you want to change the settings or continue with the old ones?")
+            choice = input("Type 'change' to edit them, or press Enter to keep the old settings: ").strip().lower()
+            if choice in ("change", "yes", "y", "edit"):
+                print("Press Enter or type 'skip' to keep each old setting.")
+                config["TOKEN"] = prompt_optional("TOKEN", config.get("TOKEN", ""), secret=True)
+                config["GUILD_ID"] = prompt_optional("GUILD_ID", config.get("GUILD_ID", ""))
+                config["CHANNEL_ID"] = prompt_optional("CHANNEL_ID", config.get("CHANNEL_ID", ""))
+                config["STATUS"] = prompt_status(config.get("STATUS", "online"))
+                config["SELF_MUTE"] = prompt_boolean_optional("SELF_MUTE", config.get("SELF_MUTE", True))
+                config["SELF_DEAF"] = prompt_boolean_optional("SELF_DEAF", config.get("SELF_DEAF", False))
+                should_save = True
 
-        self_mute = prompt_boolean("SELF_MUTE", config.get("SELF_MUTE", True))
-        self_deaf = prompt_boolean("SELF_DEAF", config.get("SELF_DEAF", False))
-
-        config = {
-            "TOKEN": required_values["TOKEN"],
-            "GUILD_ID": required_values["GUILD_ID"],
-            "CHANNEL_ID": required_values["CHANNEL_ID"],
-            "STATUS": status,
-            "SELF_MUTE": self_mute,
-            "SELF_DEAF": self_deaf,
-        }
-
+    if should_save:
+        config["STATUS"] = config.get("STATUS", "online")
+        config["SELF_MUTE"] = normalize_boolean(config.get("SELF_MUTE", True))
+        config["SELF_DEAF"] = normalize_boolean(config.get("SELF_DEAF", False))
         with open(CONFIG_PATH, "w", encoding="utf-8") as config_file:
             json.dump(config, config_file, indent=4)
             config_file.write("\n")
